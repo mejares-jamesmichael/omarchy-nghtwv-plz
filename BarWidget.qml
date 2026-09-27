@@ -7,7 +7,7 @@ import qs.Ui
 BarWidget {
   id: root
 
-  moduleName: "mejares-jamesmichael.nightwave-plaza"
+  moduleName: "kaelvxdev.nghtwv-plz"
 
   readonly property string playerPath:
     Qt.resolvedUrl("plaza-player").toString().replace(/^file:\/\//, "")
