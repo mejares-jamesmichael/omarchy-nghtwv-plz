@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "id": "mejares-jamesmichael.nightwave-plaza",
-  "name": "Nightwave Plaza",
+  "name": "nghtwv plz",
   "version": "0.1.0",
   "author": "kaelvxdev",
   "license": "MIT",
-  "description": "Listen to Nightwave Plaza from the Omarchy bar.",
+  "description": "Listen to the 24/7 online radio station Nightwave Plaza from the comfort of your Omarchy bar.",
   "homepage": "https://plaza.one/",
   "repository": "https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz",
   "keywords": ["music", "vaporwave", "radio", "mpris"],
@@ -15,8 +15,8 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Nightwave Plaza",
-    "description": "Play Nightwave Plaza",
+    "displayName": "nghtwv plz",
+    "description": "Jam to Nightwave Plaza's 24/7 vaporwave and future funk radio station",
     "category": "Media",
     "allowMultiple": false,
     "defaultSection": "left"
