@@ -1,4 +1,4 @@
-# Nightwave Plaza for Omarchy
+# nghtwv-plz for Omarchy
 
 A lightweight Omarchy bar widget for [Nightwave Plaza](https://plaza.one/), the continuously running vaporwave and future funk station. Playback runs in `mpv` and is available to Omarchy's media controls through `mpv-mpris`.
 
@@ -24,6 +24,6 @@ The widget reads the stream title from mpv and refreshes track/listener details 
 Stop the player and remove the plugin:
 
 ```sh
-~/.config/omarchy/plugins/mejares-jamesmichael.nightwave-plaza/plaza-player stop
-omarchy plugin remove mejares-jamesmichael.nightwave-plaza
+~/.config/omarchy/plugins/kaelvxdev.nghtwv-plz/plaza-player stop
+omarchy plugin remove kaelvxdev.nghtwv-plz
 ```
