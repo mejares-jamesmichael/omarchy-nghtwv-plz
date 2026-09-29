@@ -505,7 +505,7 @@ Item {
           spacing: Style.space(8)
 
           Text {
-            text: root.playing && !root.paused ? "\uf005" : "\uf186"
+            text: root.playing && !root.paused ? "\u25c6" : "\uf186"
             font.family: Style.font.menuFamily
             font.pixelSize: Style.font.icon
             color: root.accent
