@@ -5,7 +5,7 @@
   "version": "1.0.1",
   "author": "kaelvxdev",
   "license": "MIT",
-  "description": "Nightwave Plaza in your Omarchy bar: a moon-and-vinyl bar widget plus a mini-OS window with artwork, playback controls, and an audio output picker.",
+  "description": "Listen to the 24/7 online radio station Nightwave Plaza from the comfort of your Omarchy bar.",
   "homepage": "https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz",
   "repository": "https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz",
   "keywords": ["music", "vaporwave", "radio", "mpris"],
