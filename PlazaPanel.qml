@@ -505,7 +505,7 @@ Item {
           spacing: Style.space(8)
 
           Text {
-            text: root.playing && !root.paused ? "\uf011b" : "\uf186"
+            text: root.playing && !root.paused ? "\uf005" : "\uf186"
             font.family: Style.font.menuFamily
             font.pixelSize: Style.font.icon
             color: root.accent
@@ -575,7 +575,7 @@ Item {
                 Text {
                   anchors.centerIn: parent
                   visible: root.artwork === "" || root.artworkFailed
-                  text: "\uf011b"
+                  text: "\uf001"
                   font.family: Style.font.menuFamily
                   font.pixelSize: Style.space(36)
                   color: root.dim
