@@ -6,7 +6,7 @@
   "author": "kaelvxdev",
   "license": "MIT",
   "description": "Listen to the 24/7 online radio station Nightwave Plaza from the comfort of your Omarchy bar.",
-  "homepage": "https://plaza.one/",
+  "homepage": "https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz",
   "repository": "https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz",
   "keywords": ["music", "vaporwave", "radio", "mpris"],
   "kinds": ["bar-widget", "panel"],
