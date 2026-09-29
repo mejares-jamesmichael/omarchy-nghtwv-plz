@@ -505,14 +505,14 @@ Item {
           spacing: Style.space(8)
 
           Text {
-            text: root.playing && !root.paused ? "\uf011b" : "\uf186"
+            text: root.playing && !root.paused ? "\udb82\udd60" : "\uf186"
             font.family: Style.font.menuFamily
             font.pixelSize: Style.font.icon
             color: root.accent
           }
           Text {
             Layout.fillWidth: true
-            text: "NGHTWV-PLZ — plaza.one"
+            text: "NGHTWV-PLZ — player"
             font.family: Style.font.menuFamily
             font.pixelSize: Style.font.body
             font.bold: true
