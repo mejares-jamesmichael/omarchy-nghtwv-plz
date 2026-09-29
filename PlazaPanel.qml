@@ -24,6 +24,7 @@ Item {
   // ---- live player state (polled from plaza-player while open) ------------
   property bool playing: false
   property bool paused: false
+  property bool buffering: false
   property int volume: 70
   property int pendingVolume: -1
   property string playerError: ""
@@ -269,6 +270,7 @@ Item {
           const state = JSON.parse(text)
           root.playing = state.playing === true
           root.paused = state.paused === true
+          root.buffering = state.buffering === true
           root.volume = Math.max(0, Math.min(100, Math.round(Number(state.volume) || 0)))
           if (typeof state.output === "string") root.currentOutput = state.output.slice(0, 160)
           if (state.error) root.playerError = root.singleLine(state.error, 180)
@@ -598,7 +600,7 @@ Item {
                   Text {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
-                    text: (root.playing ? (root.paused ? "PAUSED" : "LIVE") : "IDLE")
+                    text: (root.playing ? (root.buffering ? "BUFFERING" : root.paused ? "PAUSED" : "LIVE") : "IDLE")
                       + (root.listeners >= 0 ? " · " + root.listeners + " listening" : "")
                     font.family: Style.font.menuFamily
                     font.pixelSize: Style.font.caption
@@ -865,7 +867,7 @@ Item {
           text: root.actionError !== "" ? root.actionError
             : root.playerError !== "" ? root.playerError
             : (root.playing
-              ? (root.paused ? "❚❚ paused — space resumes" : "▶ on air — space pauses · esc closes")
+              ? (root.buffering ? "⟳ buffering — esc closes" : root.paused ? "❚❚ paused — space resumes" : "▶ on air — space pauses · esc closes")
               : "■ idle — press play to tune in")
               + (root.currentOutput !== "" ? " · " + root.outputLabel(root.currentOutput) : "")
           font.family: Style.font.menuFamily

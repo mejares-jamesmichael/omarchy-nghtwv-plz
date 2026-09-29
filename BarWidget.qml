@@ -13,6 +13,7 @@ BarWidget {
     Qt.resolvedUrl("plaza-player").toString().replace(/^file:\/\//, "")
   property bool playing: false
   property bool paused: false
+  property bool buffering: false
   property int volume: 70
   property string title: ""
   property string plazaTitle: ""
@@ -52,6 +53,7 @@ BarWidget {
           const state = JSON.parse(text)
           root.playing = state.playing === true
           root.paused = state.paused === true
+          root.buffering = state.buffering === true
           root.volume = Math.max(0, Math.min(100, Math.round(Number(state.volume) || 0)))
           root.title = root.singleLine(state.title || "", 160)
           if (state.error) root.playerError = root.singleLine(state.error, 180)
@@ -126,7 +128,7 @@ BarWidget {
     tooltipText: root.playerError
       ? root.playerError
       : root.playing
-          ? (root.paused ? "Nightwave Plaza paused: " : "Nightwave Plaza: ")
+          ? (root.buffering ? "Nightwave Plaza buffering: " : root.paused ? "Nightwave Plaza paused: " : "Nightwave Plaza: ")
           + (root.plazaTitle || root.title || "Live stream")
           + (root.listeners >= 0 ? " · " + root.listeners + " listening" : "")
           + " · " + root.volume + "%"

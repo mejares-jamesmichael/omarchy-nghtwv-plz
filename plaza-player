@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Small mpv IPC controller for the Nightwave Plaza Omarchy widget."""
 
+import fcntl
 import json
 import os
 import re
+import signal
 import socket
 import subprocess
 import sys
@@ -19,6 +21,8 @@ HISTORY_LIMIT = 10
 PLUGIN_DIR = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "omarchy-nightwave-plaza"
 SOCKET_PATH = PLUGIN_DIR / "mpv.sock"
 SETTINGS_PATH = PLUGIN_DIR / "settings.json"
+LOCK_PATH = PLUGIN_DIR / "player.lock"
+PID_PATH = PLUGIN_DIR / "player.pid"
 SINK_NAME_RE = re.compile(r"[A-Za-z0-9._:+-]{1,160}\Z")
 MAX_STATUS_BYTES = 256 * 1024
 
@@ -150,44 +154,58 @@ def set_output(requested):
 
 def launch(play_stream=True):
     PLUGIN_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
-    if SOCKET_PATH.exists():
-        try:
-            request(["get_property", "idle-active"])
-            return
-        except (OSError, RuntimeError, TimeoutError):
-            SOCKET_PATH.unlink(missing_ok=True)
+    lock_fd = os.open(str(LOCK_PATH), os.O_CREAT | os.O_RDWR, 0o600)
+    fcntl.flock(lock_fd, fcntl.LOCK_EX)
+    try:
+        if SOCKET_PATH.exists():
+            try:
+                request(["get_property", "idle-active"])
+                return
+            except (OSError, RuntimeError, TimeoutError):
+                SOCKET_PATH.unlink(missing_ok=True)
+                PID_PATH.unlink(missing_ok=True)
 
-    command = [
-        "mpv",
-        "--no-video",
-        "--force-window=no",
-        "--idle=yes",
-        "--input-ipc-server=" + str(SOCKET_PATH),
-        "--title=Nightwave Plaza",
-        "--volume=70",
-    ]
-    remembered = configured_output()
-    if remembered and sink_exists(remembered):
-        command.append("--audio-device=pipewire/" + remembered)
-    if play_stream:
-        command.append(STREAM_URL)
-    subprocess.Popen(
-        command,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-        close_fds=True,
-    )
+        command = [
+            "mpv",
+            "--no-video",
+            "--force-window=no",
+            "--idle=yes",
+            "--input-ipc-server=" + str(SOCKET_PATH),
+            "--title=Nightwave Plaza",
+            "--volume=70",
+            "--network-timeout=30",
+            "--cache-secs=20",
+            "--demuxer-max-bytes=8MiB",
+            "--demuxer-max-back-bytes=2MiB",
+        ]
+        remembered = configured_output()
+        if remembered and sink_exists(remembered):
+            command.append("--audio-device=pipewire/" + remembered)
+        if play_stream:
+            command.append(STREAM_URL)
+        process = subprocess.Popen(
+            command,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            close_fds=True,
+        )
 
-    deadline = time.monotonic() + 5
-    while time.monotonic() < deadline:
-        try:
-            request(["get_property", "idle-active"], timeout=0.3)
-            return
-        except (OSError, RuntimeError, TimeoutError):
-            time.sleep(0.05)
-    raise RuntimeError("mpv did not start; install mpv and check its runtime directory")
+        with open(PID_PATH, "w", encoding="utf-8") as handle:
+            handle.write(str(process.pid))
+
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            try:
+                request(["get_property", "idle-active"], timeout=0.3)
+                return
+            except (OSError, RuntimeError, TimeoutError):
+                time.sleep(0.05)
+        raise RuntimeError("mpv did not start; install mpv and check its runtime directory")
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        os.close(lock_fd)
 
 
 def start_stream():
@@ -214,10 +232,31 @@ def toggle():
 
 
 def stop():
+    killed = False
     try:
         request(["quit"])
+        killed = True
     except (OSError, RuntimeError, TimeoutError):
         pass
+    if not killed and PID_PATH.exists():
+        try:
+            with open(PID_PATH, encoding="utf-8") as handle:
+                pid = int(handle.read().strip())
+        except (ValueError, OSError):
+            pid = None
+        if pid is not None:
+            try:
+                with open(f"/proc/{pid}/cmdline", "rb") as handle:
+                    cmdline = handle.read().decode("utf-8", errors="replace")
+                if str(SOCKET_PATH) in cmdline:
+                    os.kill(pid, signal.SIGTERM)
+                    try:
+                        os.waitpid(pid, 0)
+                    except ChildProcessError:
+                        pass
+            except (OSError, ProcessLookupError, FileNotFoundError):
+                pass
+        PID_PATH.unlink(missing_ok=True)
 
 
 def current_output():
@@ -233,21 +272,23 @@ def current_output():
 
 def state():
     if not SOCKET_PATH.exists():
-        return {"playing": False, "paused": False, "volume": 70, "title": "", "output": configured_output()}
+        return {"playing": False, "paused": False, "buffering": False, "volume": 70, "title": "", "output": configured_output()}
     try:
         idle = bool(request(["get_property", "idle-active"]))
         paused = bool(get_property("pause", False))
+        buffering = bool(get_property("paused-for-cache", False))
         title = get_property("media-title", "")
         volume = get_property("volume", 70)
         return {
             "playing": not idle,
             "paused": paused,
+            "buffering": buffering,
             "volume": max(0, min(100, round(float(volume)))),
             "title": str(title or ""),
             "output": current_output(),
         }
     except (OSError, RuntimeError, TimeoutError, TypeError, ValueError):
-        return {"playing": False, "paused": False, "volume": 70, "title": "", "output": configured_output()}
+        return {"playing": False, "paused": False, "buffering": False, "volume": 70, "title": "", "output": configured_output()}
 
 
 def find_value(value, names):
