@@ -434,7 +434,7 @@ Item {
           spacing: Style.space(8)
 
           Text {
-            text: "\uf8cc"
+            text: "\uf108"
             font.family: Style.font.menuFamily
             font.pixelSize: Style.font.icon
             color: root.accent

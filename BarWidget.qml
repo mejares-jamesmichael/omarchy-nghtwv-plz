@@ -121,7 +121,7 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "\uf8cc"
+    text: "\uf108"
     active: root.playing && !root.paused
     tooltipText: root.playerError
       ? root.playerError
