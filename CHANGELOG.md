@@ -17,7 +17,7 @@ Patch release: fixes the playing-state icon and the window title.
   intended: a QML `\u` escape takes exactly four hex digits, so `\uf011b` parsed as U+F011 (power symbol) plus a
   literal "b". Astral-plane codepoints (above U+FFFF) must be written
   as UTF-16 surrogate pairs (`\udb82\udd60` for U+F0960).
-- **Window title**: the mini-OS titlebar now reads `NGHTWV-PLZ — player`.
+- **Window title**: the panel titlebar now reads `NGHTWV-PLZ — player`.
 
 ## [1.0.0] - 2026-09-29
 
