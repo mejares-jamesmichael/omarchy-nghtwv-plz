@@ -121,7 +121,7 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "\uf001"
+    text: "\uf8cc"
     active: root.playing && !root.paused
     tooltipText: root.playerError
       ? root.playerError
@@ -130,11 +130,13 @@ BarWidget {
           + (root.plazaTitle || root.title || "Live stream")
           + (root.listeners >= 0 ? " · " + root.listeners + " listening" : "")
           + " · " + root.volume + "%"
-        : "Play Nightwave Plaza"
+        : "Open Nightwave Plaza"
 
     onPressed: function(mouseButton) {
+      if (!root.bar) return
       if (mouseButton === Qt.RightButton) root.runAction("stop")
-      else root.runAction("toggle")
+      else if (mouseButton === Qt.MiddleButton) root.runAction("toggle")
+      else root.bar.run("omarchy-shell shell toggle kaelvxdev.nghtwv-plz")
     }
 
     onWheelMoved: function(delta) {

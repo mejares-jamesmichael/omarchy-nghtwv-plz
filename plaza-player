@@ -13,6 +13,8 @@ from pathlib import Path
 
 STREAM_URL = "https://radio.plaza.one/mp3"
 STATUS_URL = "https://api.plaza.one/status"
+HISTORY_URL = "https://api.plaza.one/history"
+HISTORY_LIMIT = 10
 PLUGIN_DIR = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "omarchy-nightwave-plaza"
 SOCKET_PATH = PLUGIN_DIR / "mpv.sock"
 MAX_STATUS_BYTES = 256 * 1024
@@ -153,39 +155,105 @@ def find_value(value, names):
     return None
 
 
-def metadata():
+def clean_text(value, limit=160):
+    if not isinstance(value, str):
+        return ""
+    return " ".join(value.split())[:limit]
+
+
+def fetch_json(url):
     request_obj = urllib.request.Request(
-        STATUS_URL,
+        url,
         headers={"User-Agent": "omarchy-nightwave-plaza/0.1", "Accept": "application/json"},
     )
     with urllib.request.urlopen(request_obj, timeout=3) as response:
         raw = response.read(MAX_STATUS_BYTES + 1)
     if len(raw) > MAX_STATUS_BYTES:
-        raise RuntimeError("Plaza status response is too large")
-    data = json.loads(raw)
-    # Live shape: {"song": {"artist": ..., "title": ...}, "listeners": N}.
-    title = None
+        raise RuntimeError("Plaza API response is too large")
+    return json.loads(raw)
+
+
+def metadata():
+    data = fetch_json(STATUS_URL)
+    # Live shape: {"song": {"artist": ..., "title": ..., "album": ...,
+    #   "length": ..., "position": ..., "artwork_sm_src": ...}, "listeners": N}.
+    artist = ""
+    track = ""
+    album = ""
+    artwork = ""
+    length = 0
+    position = 0
     song = data.get("song") if isinstance(data, dict) else None
     if isinstance(song, dict):
-        artist = song.get("artist") if isinstance(song.get("artist"), str) else ""
-        track = song.get("title") if isinstance(song.get("title"), str) else ""
-        artist = " ".join(artist.split())
-        track = " ".join(track.split())
-        if artist and track:
-            title = artist + " - " + track
-        else:
-            title = artist or track or None
+        artist = clean_text(song.get("artist"))
+        track = clean_text(song.get("title"))
+        album = clean_text(song.get("album"))
+        artwork = clean_text(song.get("artwork_sm_src") or song.get("artwork_src"), 512)
+        try:
+            length = max(0, int(float(song.get("length", 0))))
+        except (TypeError, ValueError):
+            length = 0
+        try:
+            position = max(0, int(float(song.get("position", 0))))
+        except (TypeError, ValueError):
+            position = 0
+    title = None
+    if artist and track:
+        title = artist + " - " + track
+    else:
+        title = artist or track or None
     if title is None:
-        title = find_value(data, {"nowplaying", "now_playing", "track", "song", "title"})
+        found = find_value(data, {"nowplaying", "now_playing", "track", "song", "title"})
+        if isinstance(found, dict):
+            found = find_value(found, {"title", "name"})
+        if isinstance(found, str):
+            title = clean_text(found)
     listeners = find_value(data, {"listeners", "listener_count", "listeners_count", "current_listeners"})
-    if isinstance(title, dict):
-        title = find_value(title, {"title", "name"})
     result = {}
     if isinstance(title, str) and title.strip():
-        result["title"] = " ".join(title.split())[:160]
+        result["title"] = title[:160]
+    if artist:
+        result["artist"] = artist
+    if track:
+        result["track"] = track
+    if album:
+        result["album"] = album
+    if artwork:
+        result["artwork"] = artwork
+    if length > 0:
+        result["length"] = length
+        result["position"] = min(position, length)
     if isinstance(listeners, (int, float)) and listeners >= 0:
         result["listeners"] = int(listeners)
     print(json.dumps(result, ensure_ascii=True))
+
+
+def history():
+    data = fetch_json(HISTORY_URL)
+    # Live shape: {"songs": [{"artist": ..., "title": ..., "played_at": epoch}]}.
+    songs = data.get("songs") if isinstance(data, dict) else None
+    result = []
+    if isinstance(songs, list):
+        for song in songs[:HISTORY_LIMIT]:
+            if not isinstance(song, dict):
+                continue
+            artist = clean_text(song.get("artist"))
+            track = clean_text(song.get("title"))
+            if not artist and not track:
+                continue
+            entry = {}
+            if artist:
+                entry["artist"] = artist
+            if track:
+                entry["track"] = track
+            try:
+                played_at = int(float(song.get("played_at", 0)))
+            except (TypeError, ValueError):
+                played_at = 0
+            if played_at > 0:
+                entry["played_at"] = played_at
+            result.append(entry)
+    print(json.dumps({"songs": result}, ensure_ascii=True))
 
 
 def main(args):
@@ -194,6 +262,8 @@ def main(args):
         print(json.dumps(state(), ensure_ascii=True))
     elif args[0] == "metadata":
         metadata()
+    elif args[0] == "history":
+        history()
     elif args[0] == "toggle":
         toggle()
     elif args[0] == "play":
@@ -205,7 +275,7 @@ def main(args):
         launch(play_stream=False)
         request(["set_property", "volume", volume])
     else:
-        raise RuntimeError("Usage: plaza-player {status|metadata|toggle|play|stop|volume N}")
+        raise RuntimeError("Usage: plaza-player {status|metadata|history|toggle|play|stop|volume N}")
 
 
 if __name__ == "__main__":

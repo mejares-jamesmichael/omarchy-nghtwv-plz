@@ -9,10 +9,11 @@
   "homepage": "https://plaza.one/",
   "repository": "https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz",
   "keywords": ["music", "vaporwave", "radio", "mpris"],
-  "kinds": ["bar-widget"],
+  "kinds": ["bar-widget", "panel"],
   "keepLoaded": true,
   "entryPoints": {
-    "barWidget": "BarWidget.qml"
+    "barWidget": "BarWidget.qml",
+    "panel": "PlazaPanel.qml"
   },
   "barWidget": {
     "displayName": "nghtwv plz",
