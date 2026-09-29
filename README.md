@@ -2,7 +2,7 @@
 
 An Omarchy bar widget for [Nightwave Plaza](https://plaza.one/) — the 24/7
 vaporwave and future funk station. A crescent moon sits in your bar while
-idle, turns into a cat while the stream plays, and opens a mini-OS window
+idle, turns into a vinyl record while the stream plays, and opens a mini-OS window
 with the live track, artwork, playback controls, and an audio output picker.
 
 <!-- Screenshot: assets/preview.png -->
@@ -12,7 +12,7 @@ in `playerctl`.
 
 ## Features
 
-- **Bar widget** — moon when idle, cat when playing, with track, listener
+- **Bar widget** — moon when idle, vinyl record when playing, with track, listener
   count, and volume in the tooltip.
 - **Mini-OS window** — a centered floating panel with album artwork, an
   extrapolated progress bar, transport controls, a volume slider, and a log of

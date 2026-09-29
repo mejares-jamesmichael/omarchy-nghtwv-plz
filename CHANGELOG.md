@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-09-29
+
+Patch release: fixes the playing-state icon and the window title.
+
+### Fixed
+
+- **Playing-state icon**: the bar widget and window titlebar now show a
+  vinyl-record glyph (U+F0960) while the stream plays, keeping the crescent
+  moon for idle and paused. The previous codepoint never rendered as
+  intended: a QML `\u` escape takes exactly four hex digits, so `\uf011b` parsed as U+F011 (power symbol) plus a
+  literal "b". Astral-plane codepoints (above U+FFFF) must be written
+  as UTF-16 surrogate pairs (`\udb82\udd60` for U+F0960).
+- **Window title**: the mini-OS titlebar now reads `NGHTWV-PLZ — player`.
+
 ## [1.0.0] - 2026-09-29
 
 First stable release. The plugin is feature-complete: bar widget, mini-OS
@@ -58,4 +72,5 @@ window, audio output selection, and hardened playback.
 - **Glyph rendering**: bar glyphs are now restricted to codepoints present in
   JetBrainsMono Nerd Font, fixing icons that rendered as tofu boxes.
 
+[1.0.1]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.0.1
 [1.0.0]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.0.0
