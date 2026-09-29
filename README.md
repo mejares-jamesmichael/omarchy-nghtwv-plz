@@ -17,6 +17,7 @@ Requires `mpv` and Python 3. `mpv-mpris` is recommended for desktop media contro
 - Right click to stop playback.
 - Scroll over the widget to adjust volume.
 - Inside the window: `Space` toggles playback, `+`/`-` adjust volume, `Esc` closes.
+- The speaker button in the window picks the audio output (e.g. Bluetooth headset vs. built-in audio) without restarting playback; the choice is remembered across restarts.
 - Bind a key to open the window from anywhere: `omarchy-shell shell toggle kaelvxdev.nghtwv-plz`.
 - Use Omarchy's media controls or `playerctl` for standard playback controls.
 

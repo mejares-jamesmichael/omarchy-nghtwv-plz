@@ -3,6 +3,7 @@
 
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -17,6 +18,8 @@ HISTORY_URL = "https://api.plaza.one/history"
 HISTORY_LIMIT = 10
 PLUGIN_DIR = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "omarchy-nightwave-plaza"
 SOCKET_PATH = PLUGIN_DIR / "mpv.sock"
+SETTINGS_PATH = PLUGIN_DIR / "settings.json"
+SINK_NAME_RE = re.compile(r"[A-Za-z0-9._:+-]{1,160}\Z")
 MAX_STATUS_BYTES = 256 * 1024
 
 
@@ -51,6 +54,100 @@ def get_property(name, default=None):
         return default
 
 
+def load_settings():
+    try:
+        with open(SETTINGS_PATH, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_settings(settings):
+    PLUGIN_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    temporary = SETTINGS_PATH.with_suffix(".tmp")
+    with open(temporary, "w", encoding="utf-8") as handle:
+        json.dump(settings, handle)
+    os.replace(temporary, SETTINGS_PATH)
+
+
+def configured_output():
+    output = load_settings().get("output")
+    if isinstance(output, str) and SINK_NAME_RE.match(output):
+        return output
+    return ""
+
+
+def list_sinks():
+    try:
+        completed = subprocess.run(
+            ["pactl", "-f", "json", "list", "sinks"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        raise RuntimeError("Audio outputs are unavailable")
+    if completed.returncode != 0:
+        raise RuntimeError("Audio outputs are unavailable")
+    try:
+        sinks = json.loads(completed.stdout.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise RuntimeError("Audio outputs are unavailable")
+    if not isinstance(sinks, list):
+        raise RuntimeError("Audio outputs are unavailable")
+    return sinks
+
+
+def sink_exists(name):
+    try:
+        sinks = list_sinks()
+    except RuntimeError:
+        return False
+    return any(isinstance(sink, dict) and sink.get("name") == name for sink in sinks)
+
+
+def outputs():
+    entries = []
+    for sink in list_sinks():
+        if not isinstance(sink, dict):
+            continue
+        name = sink.get("name")
+        if not isinstance(name, str) or not SINK_NAME_RE.match(name):
+            continue
+        label = sink.get("description")
+        if not isinstance(label, str) or not label.strip():
+            label = name
+        entries.append({"id": name, "label": clean_text(label)})
+    print(json.dumps({"outputs": entries}, ensure_ascii=True))
+
+
+def set_output(requested):
+    requested = requested or ""
+    if requested and not SINK_NAME_RE.match(requested):
+        raise RuntimeError("Unknown audio output")
+    if requested and not sink_exists(requested):
+        raise RuntimeError("Unknown audio output")
+    device = "auto" if not requested else "pipewire/" + requested
+    alive = False
+    if SOCKET_PATH.exists():
+        try:
+            request(["get_property", "idle-active"])
+            alive = True
+        except (OSError, RuntimeError, TimeoutError):
+            alive = False
+    if alive:
+        try:
+            request(["set_property", "audio-device", device])
+        except (OSError, RuntimeError, TimeoutError):
+            raise RuntimeError("Audio output could not be changed")
+    settings = load_settings()
+    settings["output"] = requested
+    save_settings(settings)
+    print(json.dumps(state(), ensure_ascii=True))
+
+
 def launch(play_stream=True):
     PLUGIN_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     if SOCKET_PATH.exists():
@@ -69,6 +166,9 @@ def launch(play_stream=True):
         "--title=Nightwave Plaza",
         "--volume=70",
     ]
+    remembered = configured_output()
+    if remembered and sink_exists(remembered):
+        command.append("--audio-device=pipewire/" + remembered)
     if play_stream:
         command.append(STREAM_URL)
     subprocess.Popen(
@@ -120,9 +220,20 @@ def stop():
         pass
 
 
+def current_output():
+    device = get_property("audio-device", "auto")
+    if not isinstance(device, str):
+        return ""
+    if device.startswith("pipewire/"):
+        device = device[len("pipewire/"):]
+    if device == "auto" or not SINK_NAME_RE.match(device):
+        return ""
+    return device
+
+
 def state():
     if not SOCKET_PATH.exists():
-        return {"playing": False, "paused": False, "volume": 70, "title": ""}
+        return {"playing": False, "paused": False, "volume": 70, "title": "", "output": configured_output()}
     try:
         idle = bool(request(["get_property", "idle-active"]))
         paused = bool(get_property("pause", False))
@@ -133,9 +244,10 @@ def state():
             "paused": paused,
             "volume": max(0, min(100, round(float(volume)))),
             "title": str(title or ""),
+            "output": current_output(),
         }
     except (OSError, RuntimeError, TimeoutError, TypeError, ValueError):
-        return {"playing": False, "paused": False, "volume": 70, "title": ""}
+        return {"playing": False, "paused": False, "volume": 70, "title": "", "output": configured_output()}
 
 
 def find_value(value, names):
@@ -264,6 +376,10 @@ def main(args):
         metadata()
     elif args[0] == "history":
         history()
+    elif args[0] == "outputs":
+        outputs()
+    elif args[0] == "output":
+        set_output(args[1] if len(args) > 1 else "")
     elif args[0] == "toggle":
         toggle()
     elif args[0] == "play":
@@ -275,7 +391,7 @@ def main(args):
         launch(play_stream=False)
         request(["set_property", "volume", volume])
     else:
-        raise RuntimeError("Usage: plaza-player {status|metadata|history|toggle|play|stop|volume N}")
+        raise RuntimeError("Usage: plaza-player {status|metadata|history|outputs|output [SINK]|toggle|play|stop|volume N}")
 
 
 if __name__ == "__main__":

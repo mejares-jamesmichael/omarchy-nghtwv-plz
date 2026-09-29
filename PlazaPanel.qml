@@ -48,6 +48,13 @@ Item {
   property var history: []
   property bool historyBusy: false
 
+  // ---- audio output --------------------------------------------------------
+  property var audioOutputs: []
+  property string outputsError: ""
+  property bool outputMenuOpen: false
+  property string currentOutput: ""
+  property bool outputsBusy: false
+
   // ---- window plumbing (mirrors akshar.radio-atlas) ------------------------
   readonly property string playerPath:
     Qt.resolvedUrl("plaza-player").toString().replace(/^file:\/\//, "")
@@ -83,6 +90,14 @@ Item {
     return Qt.formatDateTime(new Date(stamp * 1000), "HH:mm")
   }
 
+  function outputLabel(sink) {
+    if (!sink) return "System default"
+    for (var i = 0; i < audioOutputs.length; i++) {
+      if (audioOutputs[i].id === sink) return singleLine(audioOutputs[i].label || sink, 40)
+    }
+    return singleLine(sink, 40)
+  }
+
   function registerWindowSetup() {
     windowSetupReady = false
     if (!windowSetupProcess.running) windowSetupProcess.running = true
@@ -109,12 +124,14 @@ Item {
 
   function close() {
     opened = false
+    outputMenuOpen = false
     windowFrameReady = false
     windowRevealTimer.stop()
     panel.visible = false
     if (statusProcess.running) statusProcess.running = false
     if (metadataProcess.running) metadataProcess.running = false
     if (historyProcess.running) historyProcess.running = false
+    if (outputsProcess.running) outputsProcess.running = false
     if (actionProcess.running) actionProcess.running = false
   }
 
@@ -175,6 +192,30 @@ Item {
     historyProcess.running = true
   }
 
+  function refreshOutputs() {
+    if (outputsBusy) return
+    outputsBusy = true
+    outputsError = ""
+    outputsProcess.command = [playerPath, "outputs"]
+    outputsProcess.running = true
+  }
+
+  function toggleOutputMenu() {
+    if (outputMenuOpen) {
+      outputMenuOpen = false
+      return
+    }
+    outputMenuOpen = true
+    refreshOutputs()
+  }
+
+  function setOutput(sink) {
+    outputMenuOpen = false
+    outputsError = ""
+    if (sink === "") root.runAction("output")
+    else root.runAction("output", sink)
+  }
+
   function runAction(action, value) {
     if (actionBusy) return
     actionBusy = true
@@ -229,6 +270,7 @@ Item {
           root.playing = state.playing === true
           root.paused = state.paused === true
           root.volume = Math.max(0, Math.min(100, Math.round(Number(state.volume) || 0)))
+          if (typeof state.output === "string") root.currentOutput = state.output.slice(0, 160)
           if (state.error) root.playerError = root.singleLine(state.error, 180)
         } catch (error) {
           root.playing = false
@@ -281,6 +323,32 @@ Item {
       }
     }
     onExited: root.historyBusy = false
+  }
+
+  Process {
+    id: outputsProcess
+    command: []
+    stdout: StdioCollector {
+      onStreamFinished: {
+        try {
+          const data = JSON.parse(text)
+          if (data && Array.isArray(data.outputs)) {
+            root.audioOutputs = data.outputs.slice(0, 24)
+            root.outputsError = ""
+          } else {
+            root.outputsError = "Audio outputs are unavailable"
+          }
+        } catch (error) {
+          root.outputsError = "Audio outputs are unavailable"
+        }
+      }
+    }
+    stderr: StdioCollector { id: outputsErrors }
+    onExited: function(exitCode) {
+      if (exitCode !== 0 && root.outputsError === "")
+        root.outputsError = root.singleLine(outputsErrors.text || "Audio outputs are unavailable", 180)
+      root.outputsBusy = false
+    }
   }
 
   Process {
@@ -398,7 +466,8 @@ Item {
       Keys.priority: Keys.AfterItem
       Keys.onPressed: function(event) {
         if (event.key === Qt.Key_Escape) {
-          root.dismiss()
+          if (root.outputMenuOpen) root.outputMenuOpen = false
+          else root.dismiss()
           event.accepted = true
         } else if (event.key === Qt.Key_Space) {
           root.runAction("toggle")
@@ -631,11 +700,14 @@ Item {
             fontFamily: Style.font.menuFamily
             onClicked: root.runAction("stop")
           }
-          Text {
-            text: "\uf028"
-            font.family: Style.font.menuFamily
-            font.pixelSize: Style.font.icon
-            color: root.dim
+          Button {
+            iconText: "\uf028"
+            bordered: true
+            tooltipText: root.currentOutput !== ""
+              ? "Audio output: " + root.outputLabel(root.currentOutput)
+              : "Choose audio output"
+            fontFamily: Style.font.menuFamily
+            onClicked: root.toggleOutputMenu()
           }
           Item {
             id: volumeSlider
@@ -680,6 +752,45 @@ Item {
             text: volumeSlider.shownVolume + "%"
             font.family: Style.font.menuFamily
             font.pixelSize: Style.font.bodySmall
+            color: root.dim
+          }
+        }
+
+        // ---- audio output picker -------------------------------------
+        ColumnLayout {
+          Layout.fillWidth: true
+          Layout.preferredHeight: root.outputMenuOpen ? implicitHeight : 0
+          visible: root.outputMenuOpen
+          spacing: Style.space(2)
+
+          Repeater {
+            model: [{ id: "", label: "System default" }].concat(root.audioOutputs)
+
+            Button {
+              required property var modelData
+              Layout.fillWidth: true
+              leftAlign: true
+              text: (modelData.id === root.currentOutput ? "● " : "○ ") + root.singleLine(modelData.label || modelData.id, 60)
+              tooltipText: modelData.id === "" ? "Follow the system default output" : modelData.id
+              fontFamily: Style.font.menuFamily
+              onClicked: root.setOutput(modelData.id)
+            }
+          }
+
+          Text {
+            Layout.fillWidth: true
+            visible: root.outputsError !== ""
+            text: root.outputsError
+            font.family: Style.font.menuFamily
+            font.pixelSize: Style.font.caption
+            color: root.urgent
+          }
+          Text {
+            Layout.fillWidth: true
+            visible: root.outputsError === "" && root.audioOutputs.length === 0
+            text: root.outputsBusy ? "scanning outputs…" : "no extra outputs found"
+            font.family: Style.font.menuFamily
+            font.pixelSize: Style.font.caption
             color: root.dim
           }
         }
@@ -753,9 +864,10 @@ Item {
           Layout.fillWidth: true
           text: root.actionError !== "" ? root.actionError
             : root.playerError !== "" ? root.playerError
-            : root.playing
+            : (root.playing
               ? (root.paused ? "❚❚ paused — space resumes" : "▶ on air — space pauses · esc closes")
-              : "■ idle — press play to tune in"
+              : "■ idle — press play to tune in")
+              + (root.currentOutput !== "" ? " · " + root.outputLabel(root.currentOutput) : "")
           font.family: Style.font.menuFamily
           font.pixelSize: Style.font.caption
           color: root.actionError !== "" || root.playerError !== "" ? root.urgent : root.dim
