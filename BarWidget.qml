@@ -132,7 +132,7 @@ BarWidget {
           + (root.plazaTitle || root.title || "Live stream")
           + (root.listeners >= 0 ? " · " + root.listeners + " listening" : "")
           + " · " + root.volume + "%"
-        : "Open Nightwave Plaza"
+        : "Open nghtwv plz"
 
     onPressed: function(mouseButton) {
       if (!root.bar) return
