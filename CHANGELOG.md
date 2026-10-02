@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-09-29
+
+Patch release: final power-symbol cleanup and tooltip rebrand.
+
+### Fixed
+
+- **Artwork placeholder**: the no-artwork slot now shows the music note
+  (`\uf001`). It still read `\uf011b`, which QML parses as U+F011 (power
+  symbol) plus a literal "b" — the last live instance of the truncation
+  bug. A repo-wide sweep confirms zero such hazards remain in code.
+
+### Changed
+
+- **Idle tooltip**: the bar widget tooltip now reads `Open nghtwv plz`,
+  matching the plugin name.
+
 ## [1.0.1] - 2026-09-29
 
 Patch release: fixes the playing-state icon and the window title.
@@ -72,5 +88,6 @@ window, audio output selection, and hardened playback.
 - **Glyph rendering**: bar glyphs are now restricted to codepoints present in
   JetBrainsMono Nerd Font, fixing icons that rendered as tofu boxes.
 
+[1.0.2]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.0.2
 [1.0.1]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.0.1
 [1.0.0]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.0.0
