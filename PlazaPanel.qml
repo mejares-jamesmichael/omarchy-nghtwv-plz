@@ -575,7 +575,7 @@ Item {
                 Text {
                   anchors.centerIn: parent
                   visible: root.artwork === "" || root.artworkFailed
-                  text: "\uf011b"
+                  text: "\uf001"
                   font.family: Style.font.menuFamily
                   font.pixelSize: Style.space(36)
                   color: root.dim
