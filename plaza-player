@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Small mpv IPC controller for the Nightwave Plaza Omarchy widget."""
+"""Small mpv IPC controller for the nghtwv plz Omarchy widget."""
 
 import fcntl
 import json
@@ -171,7 +171,7 @@ def launch(play_stream=True):
             "--force-window=no",
             "--idle=yes",
             "--input-ipc-server=" + str(SOCKET_PATH),
-            "--title=Nightwave Plaza",
+            "--title=nghtwv plz",
             "--volume=70",
             "--network-timeout=30",
             "--cache-secs=20",

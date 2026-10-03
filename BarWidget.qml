@@ -128,7 +128,7 @@ BarWidget {
     tooltipText: root.playerError
       ? root.playerError
       : root.playing
-          ? (root.buffering ? "Nightwave Plaza buffering: " : root.paused ? "Nightwave Plaza paused: " : "Nightwave Plaza: ")
+          ? (root.buffering ? "nghtwv plz buffering: " : root.paused ? "nghtwv plz paused: " : "nghtwv plz: ")
           + (root.plazaTitle || root.title || "Live stream")
           + (root.listeners >= 0 ? " · " + root.listeners + " listening" : "")
           + " · " + root.volume + "%"
