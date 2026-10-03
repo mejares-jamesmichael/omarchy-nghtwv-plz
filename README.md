@@ -5,7 +5,8 @@ vaporwave and future funk station. A crescent moon sits in your bar while
 idle, turns into a vinyl record while the stream plays, and opens a panel window
 with the live track, artwork, playback controls, and an audio output picker.
 
-<!-- Screenshot: assets/preview.png -->
+| ![nghtwv plz panel window](assets/nghtwv-preview.png) | ![nghtwv plz panel window under a different Omarchy theme](assets/plz-preview.png) |
+| --- | --- |
 
 Playback runs in `mpv`, so the stream shows up in Omarchy's media controls and
 in `playerctl`.
