@@ -6,7 +6,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 
-// Nightwave Plaza window: a centered retro-computer popup with the
+// nghtwv plz window: a centered retro-computer popup with the
 // live track, a progress readout, transport controls, volume, and the recent
 // transmission log. Summoned from the bar widget via
 // `omarchy-shell shell toggle kaelvxdev.nghtwv-plz`, which the shell routes
