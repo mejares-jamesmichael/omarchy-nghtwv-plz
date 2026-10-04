@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-10-04
+
+New visuals: vaporwave GIF backdrop, emulated meter, and a squiggly progress line.
+
+### Added
+
+- **Vaporwave GIF backdrop**: the panel desktop area shows a random looping GIF (`v2/backgrounds/random`, fresh shuffle per call) behind a dim veil, with a hover-only floating shuffle button and an author/source credit line.
+- **Emulated 24-bar meter**: decorative motion (layered sines + breathing envelope, mirrored) gated on real playback state — dances while playing, eases flat on pause/stop/stall. Deliberately no `cava` dependency; `levels[]` is the seam for real frames later.
+- **Squiggly progress line**: Canvas-drawn sine wave replacing the fill bar — thick accent stroke clipped to the played fraction, thin straight remainder, thumb glued to the leading edge. Phase follows a dedicated accumulator so it crawls while playing and freezes on pause; every frame starts with `clearRect`.
+- **README demo**: animated panel GIF replaces the two static screenshots (since removed).
+
 ## [1.0.2] - 2026-09-29
 
 Patch release: final power-symbol cleanup and tooltip rebrand.
@@ -88,6 +99,7 @@ window, audio output selection, and hardened playback.
 - **Glyph rendering**: bar glyphs are now restricted to codepoints present in
   JetBrainsMono Nerd Font, fixing icons that rendered as tofu boxes.
 
+[1.1.2]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.1.2
 [1.0.2]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.0.2
 [1.0.1]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.0.1
 [1.0.0]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.0.0
