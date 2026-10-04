@@ -634,6 +634,20 @@ Item {
             anchors.fill: parent
             hoverEnabled: true
             acceptedButtons: Qt.NoButton
+
+            Button {
+              anchors.top: parent.top
+              anchors.right: parent.right
+              anchors.topMargin: Style.space(8)
+              anchors.rightMargin: Style.space(8)
+              iconText: "\uf021"
+              tooltipText: "Shuffle backdrop"
+              fontFamily: Style.font.menuFamily
+              opacity: bgHoverZone.containsMouse ? 1 : 0
+              Behavior on opacity { NumberAnimation { duration: 150 } }
+              enabled: bgHoverZone.containsMouse
+              onClicked: root.refreshBackground()
+            }
           }
           AnimatedImage {
             anchors.fill: parent
@@ -828,20 +842,6 @@ Item {
               color: root.dim
               elide: Text.ElideRight
             }
-          }
-
-          Button {
-            anchors.top: parent.top
-            anchors.right: parent.right
-            anchors.topMargin: Style.space(8)
-            anchors.rightMargin: Style.space(8)
-            iconText: "\uf021"
-            tooltipText: "Shuffle backdrop"
-            fontFamily: Style.font.menuFamily
-            opacity: bgHoverZone.containsMouse ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: 150 } }
-            enabled: bgHoverZone.containsMouse
-            onClicked: root.refreshBackground()
           }
         }
 
