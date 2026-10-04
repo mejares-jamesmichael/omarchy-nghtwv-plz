@@ -56,6 +56,25 @@ Item {
   property string currentOutput: ""
   property bool outputsBusy: false
 
+  // ---- visuals: GIF backdrop + emulated meter (panel only) -----------------
+  // The bars are decorative motion gated on playback state, not spectrum
+  // analysis: nothing in this stack exports audio levels without an FFT
+  // dependency, and the marketplace listing stays a one-liner install.
+  property string bgUrl: ""
+  property string bgAuthor: ""
+  property string bgSource: ""
+  property bool bgBusy: false
+  property var levels: []
+  property var bgSeeds: []
+  property int visualTick: 0
+  property real visualEnergy: 0
+  readonly property string bgCredit: {
+    var parts = []
+    if (root.bgAuthor !== "") parts.push("by " + root.bgAuthor)
+    if (root.bgSource !== "") parts.push(root.bgSource)
+    return parts.join(" · ")
+  }
+
   // ---- window plumbing (mirrors akshar.radio-atlas) ------------------------
   readonly property string playerPath:
     Qt.resolvedUrl("plaza-player").toString().replace(/^file:\/\//, "")
@@ -133,7 +152,10 @@ Item {
     if (metadataProcess.running) metadataProcess.running = false
     if (historyProcess.running) historyProcess.running = false
     if (outputsProcess.running) outputsProcess.running = false
+    if (backgroundsProcess.running) backgroundsProcess.running = false
     if (actionProcess.running) actionProcess.running = false
+    levels = []
+    visualEnergy = 0
   }
 
   function dismiss() {
@@ -170,6 +192,7 @@ Item {
     refreshStatus()
     refreshMetadata()
     refreshHistory()
+    refreshBackground()
   }
 
   function refreshStatus() {
@@ -191,6 +214,40 @@ Item {
     historyBusy = true
     historyProcess.command = [playerPath, "history"]
     historyProcess.running = true
+  }
+
+  function refreshBackground() {
+    if (bgBusy) return
+    bgBusy = true
+    backgroundsProcess.command = [playerPath, "backgrounds"]
+    backgroundsProcess.running = true
+  }
+
+  function updateLevels() {
+    visualTick++
+    var live = playing && !paused && !buffering
+    visualEnergy = live
+      ? Math.min(1, visualEnergy + 0.12)
+      : Math.max(0, visualEnergy - 0.25)
+    if (bgSeeds.length !== 24) {
+      var seeds = []
+      for (var s = 0; s < 24; s++) seeds.push(Math.random() * 6.2832)
+      bgSeeds = seeds
+    }
+    var energy = visualEnergy
+    var breathe = 0.55 + 0.45 * Math.sin(visualTick * 0.05)
+    var next = []
+    for (var i = 0; i < 24; i++) {
+      if (energy <= 0) {
+        next.push(0.06)
+        continue
+      }
+      var mirror = Math.min(i, 23 - i) / 11
+      var wave = Math.sin(visualTick * 0.35 + bgSeeds[i]) * 0.5
+        + Math.sin(visualTick * 0.13 + bgSeeds[i] * 1.7) * 0.3
+      next.push(Math.max(0.06, (0.45 + 0.4 * wave) * (0.35 + 0.65 * mirror) * breathe * energy))
+    }
+    levels = next
   }
 
   function refreshOutputs() {
@@ -328,6 +385,26 @@ Item {
   }
 
   Process {
+    id: backgroundsProcess
+    command: []
+    stdout: StdioCollector {
+      onStreamFinished: {
+        try {
+          const data = JSON.parse(text)
+          if (data && typeof data.src === "string" && data.src !== "") {
+            root.bgUrl = data.src.slice(0, 512)
+            root.bgAuthor = root.singleLine(data.author || "", 80)
+            root.bgSource = root.singleLine(data.source || "", 80)
+          }
+        } catch (error) {
+          // Keep the current backdrop (or the static one) when a fetch fails.
+        }
+      }
+    }
+    onExited: root.bgBusy = false
+  }
+
+  Process {
     id: outputsProcess
     command: []
     stdout: StdioCollector {
@@ -429,6 +506,15 @@ Item {
     interval: 120
     repeat: false
     onTriggered: root.flushVolume()
+  }
+
+  Timer {
+    id: visualTimer
+    interval: 100
+    repeat: true
+    running: root.opened
+    triggeredOnStart: true
+    onTriggered: root.updateLevels()
   }
 
   Component.onCompleted: {
@@ -542,6 +628,47 @@ Item {
           radius: Math.max(0, Style.cornerRadius - 2)
           border.color: root.faint
           border.width: 1
+
+          MouseArea {
+            id: bgHoverZone
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.NoButton
+
+            Button {
+              anchors.top: parent.top
+              anchors.right: parent.right
+              anchors.topMargin: Style.space(8)
+              anchors.rightMargin: Style.space(8)
+              iconText: "\uf021"
+              tooltipText: "Shuffle backdrop"
+              fontFamily: Style.font.menuFamily
+              opacity: bgHoverZone.containsMouse ? 1 : 0
+              Behavior on opacity { NumberAnimation { duration: 150 } }
+              enabled: bgHoverZone.containsMouse
+              onClicked: root.refreshBackground()
+            }
+          }
+          AnimatedImage {
+            anchors.fill: parent
+            anchors.margins: 1
+            source: root.bgUrl
+            visible: root.bgUrl !== ""
+            asynchronous: true
+            cache: true
+            playing: root.opened
+            fillMode: Image.PreserveAspectCrop
+            opacity: 0.5
+            onStatusChanged: {
+              if (status === Image.Error) root.bgUrl = ""
+            }
+          }
+          Rectangle {
+            anchors.fill: parent
+            anchors.margins: 1
+            visible: root.bgUrl !== ""
+            color: Qt.rgba(0, 0, 0, 0.45)
+          }
 
           ColumnLayout {
             id: desktopInner
@@ -679,6 +806,41 @@ Item {
                   color: root.dim
                 }
               }
+            }
+
+            Item {
+              Layout.fillWidth: true
+              Layout.preferredHeight: 44
+
+              RowLayout {
+                anchors.fill: parent
+                spacing: 4
+
+                Repeater {
+                  model: 24
+
+                  Rectangle {
+                    required property int index
+                    readonly property real level: index < root.levels.length ? root.levels[index] : 0.06
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.max(4, level * 44)
+                    Layout.alignment: Qt.AlignBottom
+                    radius: 2
+                    color: root.accent
+                    opacity: 0.35 + 0.65 * level
+                  }
+                }
+              }
+            }
+
+            Text {
+              Layout.fillWidth: true
+              visible: root.bgCredit !== ""
+              text: root.bgCredit
+              font.family: Style.font.menuFamily
+              font.pixelSize: Style.font.caption
+              color: root.dim
+              elide: Text.ElideRight
             }
           }
         }
