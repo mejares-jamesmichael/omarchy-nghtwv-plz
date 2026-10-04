@@ -68,6 +68,7 @@ Item {
   property var bgSeeds: []
   property int visualTick: 0
   property real visualEnergy: 0
+  property real wavePhase: 0
   readonly property string bgCredit: {
     var parts = []
     if (root.bgAuthor !== "") parts.push("by " + root.bgAuthor)
@@ -226,6 +227,7 @@ Item {
   function updateLevels() {
     visualTick++
     var live = playing && !paused && !buffering
+    if (live) wavePhase += 0.12
     visualEnergy = live
       ? Math.min(1, visualEnergy + 0.12)
       : Math.max(0, visualEnergy - 0.25)
@@ -766,21 +768,73 @@ Item {
 
               Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 6
+                Layout.preferredHeight: 14
 
-                Rectangle {
+                Canvas {
+                  id: waveCanvas
                   anchors.fill: parent
-                  radius: 3
-                  color: root.faint
+                  onWidthChanged: requestPaint()
+
+                  onPaint: {
+                    var ctx = getContext("2d")
+                    if (!ctx) return
+                    var w = width
+                    var h = height
+                    if (w <= 0 || h <= 0) return
+                    var mid = h / 2
+                    // Canvas retains paint across frames: clear first or every
+                    // repaint stamps over the last one and translucent strokes
+                    // accumulate into a solid band.
+                    ctx.clearRect(0, 0, w, h)
+                    var ratio = root.trackLength > 0
+                      ? Math.max(0, Math.min(1, root.positionNow / root.trackLength))
+                      : 0
+                    var lambda = Math.max(24, w / 8)
+                    var amp = 4
+                    var phase = root.wavePhase
+                    // Thin straight remainder on the midline.
+                    ctx.lineWidth = 1.5
+                    ctx.strokeStyle = root.faint
+                    ctx.beginPath()
+                    ctx.moveTo(0, mid)
+                    ctx.lineTo(w, mid)
+                    ctx.stroke()
+                    // Thick played wave, clipped to the progress fraction.
+                    ctx.lineWidth = 4
+                    ctx.lineCap = "round"
+                    ctx.strokeStyle = root.accent
+                    ctx.save()
+                    ctx.beginPath()
+                    ctx.rect(0, 0, w * ratio, h)
+                    ctx.clip()
+                    ctx.beginPath()
+                    wavePath(ctx, w, mid, amp, lambda, phase)
+                    ctx.stroke()
+                    ctx.restore()
+                    // Thumb glued to the leading edge, hidden at 0%.
+                    if (ratio >= 0.01) {
+                      var tx = Math.max(4, Math.min(w - 4, w * ratio))
+                      ctx.fillStyle = root.accent
+                      ctx.beginPath()
+                      ctx.arc(tx, mid, 4, 0, 6.2832)
+                      ctx.fill()
+                    }
+                  }
+
+                  function wavePath(ctx, w, mid, amp, lambda, phase) {
+                    for (var x = 0; x <= w; x += 2) {
+                      var y = mid + amp * Math.sin((x / lambda) * 6.2832 + phase)
+                      if (x === 0) ctx.moveTo(x, y)
+                      else ctx.lineTo(x, y)
+                    }
+                  }
                 }
-                Rectangle {
-                  height: parent.height
-                  radius: 3
-                  width: root.trackLength > 0
-                    ? parent.width * Math.max(0, Math.min(1, root.positionNow / root.trackLength))
-                    : 0
-                  color: root.accent
-                }
+              }
+
+              Connections {
+                target: root
+                function onLevelsChanged() { waveCanvas.requestPaint() }
+                function onPositionNowChanged() { waveCanvas.requestPaint() }
               }
 
               Item {
