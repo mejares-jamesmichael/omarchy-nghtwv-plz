@@ -68,6 +68,7 @@ Item {
   property var bgSeeds: []
   property int visualTick: 0
   property real visualEnergy: 0
+  property real wavePhase: 0
   readonly property string bgCredit: {
     var parts = []
     if (root.bgAuthor !== "") parts.push("by " + root.bgAuthor)
@@ -226,6 +227,7 @@ Item {
   function updateLevels() {
     visualTick++
     var live = playing && !paused && !buffering
+    if (live) wavePhase += 0.12
     visualEnergy = live
       ? Math.min(1, visualEnergy + 0.12)
       : Math.max(0, visualEnergy - 0.25)
@@ -783,27 +785,36 @@ Item {
                     var ratio = root.trackLength > 0
                       ? Math.max(0, Math.min(1, root.positionNow / root.trackLength))
                       : 0
-                    var sum = 0
-                    for (var k = 0; k < root.levels.length; k++) sum += root.levels[k]
-                    var avg = root.levels.length > 0 ? sum / root.levels.length : 0.06
-                    var amp = 2 + 3.2 * Math.min(1, avg * 2)
-                    var lambda = 14
-                    var phase = root.positionNow * 0.8
-                    ctx.lineWidth = 2
-                    ctx.lineCap = "round"
+                    var lambda = w / 8.5
+                    var amp = 3
+                    var phase = root.wavePhase
+                    // Thin straight remainder on the midline.
+                    ctx.lineWidth = 1.5
                     ctx.strokeStyle = root.faint
                     ctx.beginPath()
-                    wavePath(ctx, w, mid, amp, lambda, phase)
+                    ctx.moveTo(0, mid)
+                    ctx.lineTo(w, mid)
                     ctx.stroke()
+                    // Thick played wave, clipped to the progress fraction.
+                    ctx.lineWidth = 4
+                    ctx.lineCap = "round"
+                    ctx.strokeStyle = root.accent
                     ctx.save()
                     ctx.beginPath()
                     ctx.rect(0, 0, w * ratio, h)
                     ctx.clip()
-                    ctx.strokeStyle = root.accent
                     ctx.beginPath()
                     wavePath(ctx, w, mid, amp, lambda, phase)
                     ctx.stroke()
                     ctx.restore()
+                    // Thumb glued to the leading edge, hidden at 0%.
+                    if (ratio >= 0.01) {
+                      var tx = Math.max(4, Math.min(w - 4, w * ratio))
+                      ctx.fillStyle = root.accent
+                      ctx.beginPath()
+                      ctx.arc(tx, mid, 4, 0, 6.2832)
+                      ctx.fill()
+                    }
                   }
 
                   function wavePath(ctx, w, mid, amp, lambda, phase) {
