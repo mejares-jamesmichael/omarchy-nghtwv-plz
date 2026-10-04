@@ -18,6 +18,9 @@ in `playerctl`.
 - **Panel window** — a centered floating panel with album artwork, an
   extrapolated progress bar, transport controls, a volume slider, and a log of
   the last ten tracks.
+- **Vaporwave visuals** — a random looping GIF backdrop (shufflable, with
+  artist credit) behind an emulated 24-bar meter that dances while playing.
+  Pure QML motion, no extra dependencies: still just `mpv` + Python 3.
 - **Audio output picker** — switch between a Bluetooth headset and built-in
   audio without restarting playback. The choice is remembered across restarts.
 - **Honest playback state** — a stalled stream shows `BUFFERING` rather than
@@ -64,6 +67,7 @@ omarchy plugin update kaelvxdev.nghtwv-plz
 | `Space` | Play/pause |
 | `+` / `-` | Volume up/down |
 | `Esc` | Close the output menu, then the window |
+| Shuffle button (desktop area) | New random GIF backdrop |
 
 Bind a key to toggle the window from anywhere:
 
