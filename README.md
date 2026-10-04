@@ -15,8 +15,8 @@ in `playerctl`.
 
 - **Bar widget** — moon when idle, vinyl record when playing, with track, listener
   count, and volume in the tooltip.
-- **Panel window** — a centered floating panel with album artwork, an
-  extrapolated progress bar, transport controls, a volume slider, and a log of
+- **Panel window** — a centered floating panel with album artwork, a
+  squiggly progress line, transport controls, a volume slider, and a log of
   the last ten tracks.
 - **Vaporwave visuals** — a random looping GIF backdrop (shufflable, with
   artist credit) behind an emulated 24-bar meter that dances while playing.
