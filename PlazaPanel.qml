@@ -766,21 +766,60 @@ Item {
 
               Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 6
+                Layout.preferredHeight: 14
 
-                Rectangle {
+                Canvas {
+                  id: waveCanvas
                   anchors.fill: parent
-                  radius: 3
-                  color: root.faint
+                  onWidthChanged: requestPaint()
+
+                  onPaint: {
+                    var ctx = getContext("2d")
+                    if (!ctx) return
+                    var w = width
+                    var h = height
+                    if (w <= 0 || h <= 0) return
+                    var mid = h / 2
+                    var ratio = root.trackLength > 0
+                      ? Math.max(0, Math.min(1, root.positionNow / root.trackLength))
+                      : 0
+                    var sum = 0
+                    for (var k = 0; k < root.levels.length; k++) sum += root.levels[k]
+                    var avg = root.levels.length > 0 ? sum / root.levels.length : 0.06
+                    var amp = 2 + 3.2 * Math.min(1, avg * 2)
+                    var lambda = 14
+                    var phase = root.positionNow * 0.8
+                    ctx.lineWidth = 2
+                    ctx.lineCap = "round"
+                    ctx.strokeStyle = root.faint
+                    ctx.beginPath()
+                    wavePath(ctx, w, mid, amp, lambda, phase)
+                    ctx.stroke()
+                    ctx.save()
+                    ctx.beginPath()
+                    ctx.rect(0, 0, w * ratio, h)
+                    ctx.clip()
+                    ctx.strokeStyle = root.accent
+                    ctx.beginPath()
+                    wavePath(ctx, w, mid, amp, lambda, phase)
+                    ctx.stroke()
+                    ctx.restore()
+                  }
+
+                  function wavePath(ctx, w, mid, amp, lambda, phase) {
+                    for (var x = 0; x <= w; x += 2) {
+                      var y = mid + amp * Math.sin((x / lambda) * 6.2832 + phase)
+                      if (x === 0) ctx.moveTo(x, y)
+                      else ctx.lineTo(x, y)
+                    }
+                  }
                 }
-                Rectangle {
-                  height: parent.height
-                  radius: 3
-                  width: root.trackLength > 0
-                    ? parent.width * Math.max(0, Math.min(1, root.positionNow / root.trackLength))
-                    : 0
-                  color: root.accent
-                }
+              }
+
+              Connections {
+                target: root
+                function onLevelsChanged() { waveCanvas.requestPaint() }
+                function onPositionNowChanged() { waveCanvas.requestPaint() }
               }
 
               Item {
