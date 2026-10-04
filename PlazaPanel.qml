@@ -782,11 +782,15 @@ Item {
                     var h = height
                     if (w <= 0 || h <= 0) return
                     var mid = h / 2
+                    // Canvas retains paint across frames: clear first or every
+                    // repaint stamps over the last one and translucent strokes
+                    // accumulate into a solid band.
+                    ctx.clearRect(0, 0, w, h)
                     var ratio = root.trackLength > 0
                       ? Math.max(0, Math.min(1, root.positionNow / root.trackLength))
                       : 0
-                    var lambda = w / 8.5
-                    var amp = 3
+                    var lambda = Math.max(24, w / 8)
+                    var amp = 4
                     var phase = root.wavePhase
                     // Thin straight remainder on the midline.
                     ctx.lineWidth = 1.5
