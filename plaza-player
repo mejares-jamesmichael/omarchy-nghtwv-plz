@@ -18,6 +18,7 @@ STREAM_URL = "https://radio.plaza.one/mp3"
 STATUS_URL = "https://api.plaza.one/status"
 HISTORY_URL = "https://api.plaza.one/history"
 HISTORY_LIMIT = 10
+BACKGROUNDS_URL = "https://api.plaza.one/v2/backgrounds/random"
 PLUGIN_DIR = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "omarchy-nightwave-plaza"
 SOCKET_PATH = PLUGIN_DIR / "mpv.sock"
 SETTINGS_PATH = PLUGIN_DIR / "settings.json"
@@ -409,6 +410,34 @@ def history():
     print(json.dumps({"songs": result}, ensure_ascii=True))
 
 
+def backgrounds():
+    data = fetch_json(BACKGROUNDS_URL)
+    # Live shape: {"data": {"id": ..., "src": ..., "author": ..., "source": ...}}.
+    # The API randomizes server-side, so every call is a fresh shuffle.
+    item = data.get("data") if isinstance(data, dict) else None
+    if not isinstance(item, dict):
+        raise RuntimeError("Plaza backgrounds response has no data")
+    result = {}
+    try:
+        background_id = int(item.get("id", 0))
+    except (TypeError, ValueError):
+        background_id = 0
+    if background_id > 0:
+        result["id"] = background_id
+    artwork = clean_text(item.get("src"), 512)
+    if artwork:
+        result["src"] = artwork
+    author = clean_text(item.get("author"))
+    if author:
+        result["author"] = author
+    source = clean_text(item.get("source"))
+    if source:
+        result["source"] = source
+    if not result.get("src"):
+        raise RuntimeError("Plaza backgrounds response has no image")
+    print(json.dumps(result, ensure_ascii=True))
+
+
 def main(args):
     PLUGIN_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     if not args or args[0] == "status":
@@ -417,6 +446,8 @@ def main(args):
         metadata()
     elif args[0] == "history":
         history()
+    elif args[0] == "backgrounds":
+        backgrounds()
     elif args[0] == "outputs":
         outputs()
     elif args[0] == "output":
@@ -432,7 +463,7 @@ def main(args):
         launch(play_stream=False)
         request(["set_property", "volume", volume])
     else:
-        raise RuntimeError("Usage: plaza-player {status|metadata|history|outputs|output [SINK]|toggle|play|stop|volume N}")
+        raise RuntimeError("Usage: plaza-player {status|metadata|history|backgrounds|outputs|output [SINK]|toggle|play|stop|volume N}")
 
 
 if __name__ == "__main__":
