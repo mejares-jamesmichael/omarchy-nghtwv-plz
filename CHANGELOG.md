@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-10-24
+
+Hotfix: the panel no longer picks a new backdrop every time it opens.
+
+### Fixed
+
+- **Backdrop churn**: opening the panel refetched Plaza's random-background
+  endpoint each time and replaced the GIF already on screen. The pick is now
+  remembered in `settings.json` for the runtime session, so ordinary opens
+  restore it without a network request; a reboot starts from one fresh fetch.
+  Shuffle still forces a new server-random pick (`backgrounds new`), retrying
+  once when the endpoint repeats the image currently showing, and a stored
+  image that fails to decode is replaced once automatically.
+
 ## [1.1.2] - 2026-10-04
 
 New visuals: vaporwave GIF backdrop, emulated meter, and a squiggly progress line.
@@ -99,6 +113,7 @@ window, audio output selection, and hardened playback.
 - **Glyph rendering**: bar glyphs are now restricted to codepoints present in
   JetBrainsMono Nerd Font, fixing icons that rendered as tofu boxes.
 
+[1.1.3]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.1.3
 [1.1.2]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.1.2
 [1.0.2]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.0.2
 [1.0.1]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.0.1
