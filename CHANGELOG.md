@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] - 2026-10-24
+
+Patch release: MPRIS clients now show the current track title.
+
+### Added
+
+- **MPRIS track title**: every successful `metadata` poll now mirrors Plaza's
+  `Artist - Track` onto mpv's `force-media-title`, the property `mpv-mpris`
+  publishes as `xesam:title`. Media controls, lock screens, and visualizers
+  that read MPRIS show the song instead of the stream URL's `mp3`, and mpv
+  starts with `Nightwave Plaza` so the first seconds are never wrong.
+  The artist is folded into the title because mpv exposes no writable
+  metadata fields for this stream. Per-track artwork is not exposed:
+  `mpv-mpris` derives `mpris:artUrl` only from local or embedded cover art
+  and caches it per media path.
+
 ## [1.1.3] - 2026-10-24
 
 Hotfix: the panel no longer picks a new backdrop every time it opens.
@@ -113,6 +129,7 @@ window, audio output selection, and hardened playback.
 - **Glyph rendering**: bar glyphs are now restricted to codepoints present in
   JetBrainsMono Nerd Font, fixing icons that rendered as tofu boxes.
 
+[1.1.4]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.1.4
 [1.1.3]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.1.3
 [1.1.2]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.1.2
 [1.0.2]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.0.2
