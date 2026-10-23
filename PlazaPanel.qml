@@ -65,6 +65,8 @@ Item {
   property string bgSource: ""
   property bool bgBusy: false
   property bool bgHealed: false
+  property bool bgRestoreQueued: false
+  property bool bgShuffleQueued: false
   property var levels: []
   property var bgSeeds: []
   property int visualTick: 0
@@ -159,6 +161,9 @@ Item {
     if (historyProcess.running) historyProcess.running = false
     if (outputsProcess.running) outputsProcess.running = false
     if (backgroundsProcess.running) backgroundsProcess.running = false
+    // Queued backdrop work dies with the panel.
+    bgRestoreQueued = false
+    bgShuffleQueued = false
     if (actionProcess.running) actionProcess.running = false
     levels = []
     visualEnergy = 0
@@ -222,14 +227,20 @@ Item {
   }
 
   function refreshBackground() {
-    if (bgBusy) return
+    if (bgBusy) {
+      bgRestoreQueued = true
+      return
+    }
     bgBusy = true
     backgroundsProcess.command = [playerPath, "backgrounds"]
     backgroundsProcess.running = true
   }
 
   function shuffleBackground() {
-    if (bgBusy) return
+    if (bgBusy) {
+      bgShuffleQueued = true
+      return
+    }
     bgBusy = true
     backgroundsProcess.command = [playerPath, "backgrounds", "new"]
     backgroundsProcess.running = true
@@ -414,7 +425,20 @@ Item {
         }
       }
     }
-    onExited: root.bgBusy = false
+    onExited: {
+      root.bgBusy = false
+      // Consume at most one follow-up per exit: a shuffle wins over the
+      // restore, and both flags are cleared so stale intents cannot leak.
+      var wantShuffle = root.bgShuffleQueued
+      var wantRestore = root.bgRestoreQueued
+      root.bgShuffleQueued = false
+      root.bgRestoreQueued = false
+      if (wantShuffle) {
+        if (root.opened) root.shuffleBackground()
+      } else if (wantRestore && root.opened && root.bgUrl === "") {
+        root.refreshBackground()
+      }
+    }
   }
 
   Process {
