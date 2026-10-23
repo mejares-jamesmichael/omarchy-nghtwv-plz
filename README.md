@@ -17,9 +17,10 @@ in `playerctl`.
 - **Panel window** — a centered floating panel with album artwork, a
   squiggly progress line, transport controls, a volume slider, and a log of
   the last ten tracks.
-- **Vaporwave visuals** — a random looping GIF backdrop (shufflable, with
-  artist credit) behind an emulated 24-bar meter that dances while playing.
-  Pure QML motion, no extra dependencies: still just `mpv` + Python 3.
+- **Vaporwave visuals** — a random looping GIF backdrop (remembered between
+  opens, shufflable, with artist credit) behind an emulated 24-bar meter
+  that dances while playing. Pure QML motion, no extra dependencies: still
+  just `mpv` + Python 3.
 - **Audio output picker** — switch between a Bluetooth headset and built-in
   audio without restarting playback. The choice is remembered across restarts.
 - **Honest playback state** — a stalled stream shows `BUFFERING` rather than
@@ -85,6 +86,7 @@ information from Plaza's public API:
 - stream: `https://radio.plaza.one/mp3`
 - now playing: `https://api.plaza.one/status`
 - history: `https://api.plaza.one/history`
+- backdrop: `https://api.plaza.one/v2/backgrounds/random`
 
 No API key is required. If Plaza's API is unreachable, playback continues and
 the window simply shows the last known track.

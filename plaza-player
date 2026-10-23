@@ -410,13 +410,10 @@ def history():
     print(json.dumps({"songs": result}, ensure_ascii=True))
 
 
-def backgrounds():
-    data = fetch_json(BACKGROUNDS_URL)
-    # Live shape: {"data": {"id": ..., "src": ..., "author": ..., "source": ...}}.
-    # The API randomizes server-side, so every call is a fresh shuffle.
-    item = data.get("data") if isinstance(data, dict) else None
+def clean_background(item):
+    """Normalize one background entry into the plugin's compact output shape."""
     if not isinstance(item, dict):
-        raise RuntimeError("Plaza backgrounds response has no data")
+        return {}
     result = {}
     try:
         background_id = int(item.get("id", 0))
@@ -434,8 +431,52 @@ def backgrounds():
     if source:
         result["source"] = source
     if not result.get("src"):
+        return {}
+    return result
+
+
+def fetch_random_background():
+    """Fetch one server-random pick from Plaza's background endpoint."""
+    data = fetch_json(BACKGROUNDS_URL)
+    # Live shape: {"data": {"id": ..., "src": ..., "author": ..., "source": ...}}.
+    # The API randomizes server-side per call.
+    item = data.get("data") if isinstance(data, dict) else None
+    if not isinstance(item, dict):
+        raise RuntimeError("Plaza backgrounds response has no data")
+    result = clean_background(item)
+    if not result:
         raise RuntimeError("Plaza backgrounds response has no image")
-    print(json.dumps(result, ensure_ascii=True))
+    return result
+
+
+def same_background(saved, pick):
+    """Report whether two picks describe the same image (by id, else by src)."""
+    if saved.get("id") and saved.get("id") == pick.get("id"):
+        return True
+    return bool(saved.get("src") and saved.get("src") == pick.get("src"))
+
+
+def backgrounds(force_new=False):
+    """Print one background pick as {id?, src, author?, source?}.
+
+    The pick is remembered in settings.json, so a plain `backgrounds` call
+    restores it without a network request, and `backgrounds new` fetches a
+    fresh server-random pick, retrying once when the endpoint repeats the
+    image currently showing. The runtime directory is wiped on logout, so a
+    fresh boot starts from one new fetch.
+    """
+    saved = clean_background(load_settings().get("background"))
+    if saved and not force_new:
+        # Restore the remembered pick: no request and no settings rewrite.
+        print(json.dumps(saved, ensure_ascii=True))
+        return
+    pick = fetch_random_background()
+    if saved and same_background(saved, pick):
+        pick = fetch_random_background()
+    settings = load_settings()
+    settings["background"] = pick
+    save_settings(settings)
+    print(json.dumps(pick, ensure_ascii=True))
 
 
 def main(args):
@@ -447,7 +488,10 @@ def main(args):
     elif args[0] == "history":
         history()
     elif args[0] == "backgrounds":
-        backgrounds()
+        sub = args[1] if len(args) > 1 else ""
+        if sub not in ("", "new"):
+            raise RuntimeError("Usage: plaza-player backgrounds [new]")
+        backgrounds(force_new=bool(sub))
     elif args[0] == "outputs":
         outputs()
     elif args[0] == "output":
@@ -463,7 +507,7 @@ def main(args):
         launch(play_stream=False)
         request(["set_property", "volume", volume])
     else:
-        raise RuntimeError("Usage: plaza-player {status|metadata|history|backgrounds|outputs|output [SINK]|toggle|play|stop|volume N}")
+        raise RuntimeError("Usage: plaza-player {status|metadata|history|backgrounds [new]|outputs|output [SINK]|toggle|play|stop|volume N}")
 
 
 if __name__ == "__main__":

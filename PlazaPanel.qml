@@ -64,6 +64,9 @@ Item {
   property string bgAuthor: ""
   property string bgSource: ""
   property bool bgBusy: false
+  property bool bgHealed: false
+  property bool bgRestoreQueued: false
+  property bool bgShuffleQueued: false
   property var levels: []
   property var bgSeeds: []
   property int visualTick: 0
@@ -140,6 +143,10 @@ Item {
     playerError = ""
     actionError = ""
     refreshAll()
+    // Restore-or-fetch at boot covers ordinary opens; retry only when no
+    // backdrop ever loaded (e.g. a close() killed the boot fetch in flight).
+    if (!bgUrl)
+      refreshBackground()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
@@ -154,6 +161,9 @@ Item {
     if (historyProcess.running) historyProcess.running = false
     if (outputsProcess.running) outputsProcess.running = false
     if (backgroundsProcess.running) backgroundsProcess.running = false
+    // Queued backdrop work dies with the panel.
+    bgRestoreQueued = false
+    bgShuffleQueued = false
     if (actionProcess.running) actionProcess.running = false
     levels = []
     visualEnergy = 0
@@ -193,7 +203,6 @@ Item {
     refreshStatus()
     refreshMetadata()
     refreshHistory()
-    refreshBackground()
   }
 
   function refreshStatus() {
@@ -218,9 +227,22 @@ Item {
   }
 
   function refreshBackground() {
-    if (bgBusy) return
+    if (bgBusy) {
+      bgRestoreQueued = true
+      return
+    }
     bgBusy = true
     backgroundsProcess.command = [playerPath, "backgrounds"]
+    backgroundsProcess.running = true
+  }
+
+  function shuffleBackground() {
+    if (bgBusy) {
+      bgShuffleQueued = true
+      return
+    }
+    bgBusy = true
+    backgroundsProcess.command = [playerPath, "backgrounds", "new"]
     backgroundsProcess.running = true
   }
 
@@ -403,7 +425,20 @@ Item {
         }
       }
     }
-    onExited: root.bgBusy = false
+    onExited: {
+      root.bgBusy = false
+      // Consume at most one follow-up per exit: a shuffle wins over the
+      // restore, and both flags are cleared so stale intents cannot leak.
+      var wantShuffle = root.bgShuffleQueued
+      var wantRestore = root.bgRestoreQueued
+      root.bgShuffleQueued = false
+      root.bgRestoreQueued = false
+      if (wantShuffle) {
+        if (root.opened) root.shuffleBackground()
+      } else if (wantRestore && root.opened && root.bgUrl === "") {
+        root.refreshBackground()
+      }
+    }
   }
 
   Process {
@@ -521,6 +556,9 @@ Item {
 
   Component.onCompleted: {
     registerWindowSetup()
+    // One restore-or-fetch per shell session: the remembered backdrop loads
+    // while the panel is still hidden, so opening it never refetches.
+    refreshBackground()
   }
 
   Connections {
@@ -648,7 +686,7 @@ Item {
               opacity: bgHoverZone.containsMouse ? 1 : 0
               Behavior on opacity { NumberAnimation { duration: 150 } }
               enabled: bgHoverZone.containsMouse
-              onClicked: root.refreshBackground()
+              onClicked: root.shuffleBackground()
             }
           }
           AnimatedImage {
@@ -662,7 +700,18 @@ Item {
             fillMode: Image.PreserveAspectCrop
             opacity: 0.5
             onStatusChanged: {
-              if (status === Image.Error) root.bgUrl = ""
+              if (status === Image.Ready) {
+                root.bgHealed = false
+              } else if (status === Image.Error && root.bgUrl !== "") {
+                // A stored pick whose URL no longer decodes gets exactly one
+                // replacement; if that also fails, stop until a load succeeds.
+                if (!root.bgHealed) {
+                  root.bgHealed = true
+                  root.shuffleBackground()
+                } else {
+                  root.bgUrl = ""
+                }
+              }
             }
           }
           Rectangle {
