@@ -173,6 +173,9 @@ def launch(play_stream=True):
             "--idle=yes",
             "--input-ipc-server=" + str(SOCKET_PATH),
             "--title=nghtwv plz",
+            # MPRIS clients read media-title; the station name bridges the gap
+            # until the first metadata poll publishes the track.
+            "--force-media-title=Nightwave Plaza",
             "--volume=70",
             "--network-timeout=30",
             "--cache-secs=20",
@@ -327,6 +330,19 @@ def fetch_json(url):
     return json.loads(raw)
 
 
+def publish_media_title(title):
+    """Mirror the current track onto mpv's media-title for MPRIS clients."""
+    if not title or not SOCKET_PATH.exists():
+        return
+    try:
+        if get_property("force-media-title") == title:
+            return
+        request(["set_property", "force-media-title", title])
+    except (OSError, RuntimeError, TimeoutError):
+        # Metadata output must not depend on playback being alive.
+        pass
+
+
 def metadata():
     data = fetch_json(STATUS_URL)
     # Live shape: {"song": {"artist": ..., "title": ..., "album": ...,
@@ -379,6 +395,8 @@ def metadata():
         result["position"] = min(position, length)
     if isinstance(listeners, (int, float)) and listeners >= 0:
         result["listeners"] = int(listeners)
+    if "title" in result:
+        publish_media_title(result["title"])
     print(json.dumps(result, ensure_ascii=True))
 
 

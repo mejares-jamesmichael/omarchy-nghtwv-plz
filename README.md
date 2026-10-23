@@ -8,7 +8,7 @@ with the live track, artwork, playback controls, and an audio output picker.
 ![nghtwv plz panel window demo](assets/nghtwv-plz-demo.gif)
 
 Playback runs in `mpv`, so the stream shows up in Omarchy's media controls and
-in `playerctl`.
+in `playerctl`, and the current track title is published over MPRIS.
 
 ## Features
 
@@ -25,7 +25,11 @@ in `playerctl`.
   audio without restarting playback. The choice is remembered across restarts.
 - **Honest playback state** — a stalled stream shows `BUFFERING` rather than
   claiming to be live, and a failed connection falls back to `IDLE`.
-- **Media key support** — works with Omarchy's media controls and `playerctl`.
+- **Media controls and MPRIS** — works with Omarchy's media controls and
+  `playerctl`, and publishes the current track title (`Artist - Track`) to
+  MPRIS, so bar widgets, lock screens, and visualizers show the song instead
+  of the stream URL. The artist rides inside the title, and per-track artwork
+  is not exposed (see Troubleshooting).
 
 ## Requirements
 
@@ -91,6 +95,11 @@ information from Plaza's public API:
 No API key is required. If Plaza's API is unreachable, playback continues and
 the window simply shows the last known track.
 
+Each successful now-playing poll also mirrors the track title into `mpv`'s
+`force-media-title`, which is the value `mpv-mpris` publishes as
+`xesam:title`. `mpv` starts with the station name so nothing ever shows up as
+`mp3`, and MPRIS clients pick up track changes within one poll (30 seconds).
+
 ## Troubleshooting
 
 - **No sound, but the widget says playing:** `mpv` is probably still holding a
@@ -108,6 +117,11 @@ the window simply shows the last known track.
   `hyprctl -j status | jq -r .configProvider`.
 - **Media controls do not see the stream:** install `mpv-mpris` and confirm
   `playerctl -l` lists MPV during playback.
+- **An MPRIS widget shows a placeholder image for the track:** `mpv-mpris`
+  derives `mpris:artUrl` only from local cover-art files, embedded art, or
+  folder art, and caches it per media path — a radio stream has none of those,
+  and the stream path never changes. The title still updates every poll; for
+  per-track artwork, the MPRIS client itself would need to read Plaza's API.
 
 ## Credits and attribution
 
