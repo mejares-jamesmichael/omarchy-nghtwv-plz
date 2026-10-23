@@ -64,6 +64,7 @@ Item {
   property string bgAuthor: ""
   property string bgSource: ""
   property bool bgBusy: false
+  property bool bgHealed: false
   property var levels: []
   property var bgSeeds: []
   property int visualTick: 0
@@ -140,6 +141,10 @@ Item {
     playerError = ""
     actionError = ""
     refreshAll()
+    // Restore-or-fetch at boot covers ordinary opens; retry only when no
+    // backdrop ever loaded (e.g. a close() killed the boot fetch in flight).
+    if (!bgUrl)
+      refreshBackground()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
@@ -193,7 +198,6 @@ Item {
     refreshStatus()
     refreshMetadata()
     refreshHistory()
-    refreshBackground()
   }
 
   function refreshStatus() {
@@ -221,6 +225,13 @@ Item {
     if (bgBusy) return
     bgBusy = true
     backgroundsProcess.command = [playerPath, "backgrounds"]
+    backgroundsProcess.running = true
+  }
+
+  function shuffleBackground() {
+    if (bgBusy) return
+    bgBusy = true
+    backgroundsProcess.command = [playerPath, "backgrounds", "new"]
     backgroundsProcess.running = true
   }
 
@@ -521,6 +532,9 @@ Item {
 
   Component.onCompleted: {
     registerWindowSetup()
+    // One restore-or-fetch per shell session: the remembered backdrop loads
+    // while the panel is still hidden, so opening it never refetches.
+    refreshBackground()
   }
 
   Connections {
@@ -648,7 +662,7 @@ Item {
               opacity: bgHoverZone.containsMouse ? 1 : 0
               Behavior on opacity { NumberAnimation { duration: 150 } }
               enabled: bgHoverZone.containsMouse
-              onClicked: root.refreshBackground()
+              onClicked: root.shuffleBackground()
             }
           }
           AnimatedImage {
@@ -662,7 +676,18 @@ Item {
             fillMode: Image.PreserveAspectCrop
             opacity: 0.5
             onStatusChanged: {
-              if (status === Image.Error) root.bgUrl = ""
+              if (status === Image.Ready) {
+                root.bgHealed = false
+              } else if (status === Image.Error && root.bgUrl !== "") {
+                // A stored pick whose URL no longer decodes gets exactly one
+                // replacement; if that also fails, stop until a load succeeds.
+                if (!root.bgHealed) {
+                  root.bgHealed = true
+                  root.shuffleBackground()
+                } else {
+                  root.bgUrl = ""
+                }
+              }
             }
           }
           Rectangle {
