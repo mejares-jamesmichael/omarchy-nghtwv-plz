@@ -5,6 +5,29 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.5] - 2026-10-27
+
+Security hardening: the animated backdrop is now downloaded and validated by
+`plaza-player`, so the panel only ever loads a vetted local file.
+
+### Security
+
+- **Bounded backdrop pipeline**: `plaza-player backgrounds` owns the image
+  lifecycle end to end. Picks are fetched over HTTPS only (redirects
+  restricted to HTTPS, 10 s timeout, 8 MiB size cap) and structurally
+  validated as GIFs before any bytes touch disk — canvas ≤1920×1080,
+  ≤60 frames, ≤16M aggregate canvas pixels, no malformed or trailing data.
+  Validated files are cached atomically in the private runtime directory and
+  the panel receives only a local `file://` URL, so a hostile image host can
+  no longer exhaust the shared shell's memory with unbounded animation frames
+  (`AnimatedImage.cache: false` as an extra safeguard). A failed fetch or
+  validation keeps the current backdrop in place; an initial failure leaves
+  the empty/static state.
+- **Session restore preserved**: the original API URL is kept in a separate
+  `background_api_src` settings key, so shuffle dedup and cache lookup keep
+  working across opens, and missing cache files are refetched through the
+  same validation.
+
 ## [1.1.4] - 2026-10-24
 
 Patch release: MPRIS clients now show the current track title.
@@ -129,6 +152,7 @@ window, audio output selection, and hardened playback.
 - **Glyph rendering**: bar glyphs are now restricted to codepoints present in
   JetBrainsMono Nerd Font, fixing icons that rendered as tofu boxes.
 
+[1.1.5]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.1.5
 [1.1.4]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.1.4
 [1.1.3]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.1.3
 [1.1.2]: https://github.com/mejares-jamesmichael/omarchy-nghtwv-plz/releases/tag/v1.1.2

@@ -100,6 +100,14 @@ Each successful now-playing poll also mirrors the track title into `mpv`'s
 `xesam:title`. `mpv` starts with the station name so nothing ever shows up as
 `mp3`, and MPRIS clients pick up track changes within one poll (30 seconds).
 
+Backdrop picks are downloaded and validated by `plaza-player` before QML ever
+sees them: HTTPS-only fetches (redirects restricted to HTTPS, a 10-second
+timeout, and an 8 MiB size cap) must return a structurally sound GIF within a
+1920×1080 canvas, 60 frames, and a 16-megapixel aggregate pixel budget.
+Validated files are cached in the private runtime directory, so the panel
+loads a local `file://` image — a hostile or broken image host can only fail
+one fetch, and the current backdrop stays put.
+
 ## Troubleshooting
 
 - **No sound, but the widget says playing:** `mpv` is probably still holding a

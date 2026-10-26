@@ -695,7 +695,7 @@ Item {
             source: root.bgUrl
             visible: root.bgUrl !== ""
             asynchronous: true
-            cache: true
+            cache: false
             playing: root.opened
             fillMode: Image.PreserveAspectCrop
             opacity: 0.5

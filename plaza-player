@@ -2,6 +2,7 @@
 """Small mpv IPC controller for the nghtwv plz Omarchy widget."""
 
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -10,6 +11,7 @@ import socket
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -26,6 +28,17 @@ LOCK_PATH = PLUGIN_DIR / "player.lock"
 PID_PATH = PLUGIN_DIR / "player.pid"
 SINK_NAME_RE = re.compile(r"[A-Za-z0-9._:+-]{1,160}\Z")
 MAX_STATUS_BYTES = 256 * 1024
+
+# Backdrop validation limits (owned by plaza-player; initial defaults).
+BACKGROUND_CACHE_DIR = PLUGIN_DIR / "backgrounds"
+BACKGROUND_CACHE_INDEX = PLUGIN_DIR / "backgrounds.json"
+MAX_IMAGE_BYTES = 8 * 1024 * 1024
+IMAGE_TIMEOUT = 10
+MAX_CANVAS_WIDTH = 1920
+MAX_CANVAS_HEIGHT = 1080
+MAX_FRAMES = 60
+MAX_AGGREGATE_PIXELS = 16 * 1024 * 1024
+GIF_SIGNATURES = (b"GIF87a", b"GIF89a")
 
 
 def request(command, timeout=1.5):
@@ -318,6 +331,231 @@ def clean_text(value, limit=160):
     return " ".join(value.split())[:limit]
 
 
+def is_remote_url(value):
+    """Report whether `value` is a plain HTTPS URL string."""
+    return isinstance(value, str) and value.startswith("https://")
+
+
+class HttpsOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Follow redirects only when the target remains HTTPS."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not newurl.startswith("https://"):
+            raise urllib.error.HTTPError(
+                newurl, code, "non-HTTPS redirect is not allowed", headers, None
+            )
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def fetch_image(url):
+    """Download an image over HTTPS with redirect enforcement and size limits.
+
+    Returns the raw bytes. Raises RuntimeError on any policy violation.
+    """
+    if not is_remote_url(url):
+        raise RuntimeError("image URL must be HTTPS")
+    opener = urllib.request.build_opener(HttpsOnlyRedirectHandler)
+    request_obj = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "omarchy-nightwave-plaza/0.1",
+            "Accept": "image/gif",
+        },
+    )
+    with opener.open(request_obj, timeout=IMAGE_TIMEOUT) as response:
+        chunks = []
+        total = 0
+        while True:
+            chunk = response.read(65536)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_IMAGE_BYTES:
+                raise RuntimeError("image download exceeds size limit")
+            chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def validate_gif(data):
+    """Validate GIF structure and resource limits.
+
+    Returns (canvas_width, canvas_height, frame_count). Raises RuntimeError
+    for malformed or over-budget GIFs.
+    """
+    if len(data) < 13:
+        raise RuntimeError("image is too small to be a GIF")
+    if data[:6] not in GIF_SIGNATURES:
+        raise RuntimeError("not a GIF image")
+
+    # Logical Screen Descriptor (bytes 6-12).
+    canvas_width = int.from_bytes(data[6:8], "little")
+    canvas_height = int.from_bytes(data[8:10], "little")
+    packed = data[10]
+    if canvas_width == 0 or canvas_height == 0:
+        raise RuntimeError("GIF canvas has zero dimensions")
+    if canvas_width > MAX_CANVAS_WIDTH or canvas_height > MAX_CANVAS_HEIGHT:
+        raise RuntimeError("GIF canvas exceeds dimension limit")
+
+    # Skip Global Color Table if present.
+    offset = 13
+    if packed & 0x80:
+        color_table_entries = 2 ** ((packed & 0x07) + 1)
+        offset += color_table_entries * 3
+
+    frame_count = 0
+    while offset < len(data):
+        block_type = data[offset]
+        if block_type == 0x3B:  # Trailer
+            break
+        elif block_type == 0x21:  # Extension
+            if offset + 2 >= len(data):
+                raise RuntimeError("truncated GIF extension")
+            offset += 2  # introducer + label
+            terminated = False
+            while offset < len(data):
+                sub_size = data[offset]
+                if sub_size == 0:
+                    offset += 1
+                    terminated = True
+                    break
+                if offset + 1 + sub_size > len(data):
+                    raise RuntimeError("truncated GIF sub-block")
+                offset += 1 + sub_size
+            if not terminated:
+                raise RuntimeError("truncated GIF extension (no terminator)")
+        elif block_type == 0x2C:  # Image Descriptor (one frame)
+            if offset + 10 > len(data):
+                raise RuntimeError("truncated GIF image descriptor")
+            frame_count += 1
+            if frame_count > MAX_FRAMES:
+                raise RuntimeError("GIF exceeds frame limit")
+            frame_packed = data[offset + 9]
+            offset += 10  # descriptor header (separator + 4 fields + packed)
+            if frame_packed & 0x80:
+                lct_entries = 2 ** ((frame_packed & 0x07) + 1)
+                offset += lct_entries * 3
+            terminated = False
+            while offset < len(data):
+                sub_size = data[offset]
+                if sub_size == 0:
+                    offset += 1
+                    terminated = True
+                    break
+                if offset + 1 + sub_size > len(data):
+                    raise RuntimeError("truncated GIF image data")
+                offset += 1 + sub_size
+            if not terminated:
+                raise RuntimeError("truncated GIF image data (no terminator)")
+        else:
+            raise RuntimeError(f"unknown GIF block type 0x{block_type:02x}")
+    else:
+        # Loop exited without hitting the trailer: no terminator found.
+        raise RuntimeError("GIF has no trailer")
+
+    if offset + 1 != len(data):
+        # Trailer must be the final byte; junk after it is rejected.
+        raise RuntimeError("GIF has trailing data after trailer")
+
+    if frame_count == 0:
+        raise RuntimeError("GIF has no frames")
+
+    # Aggregate canvas pixels across frames.
+    aggregate = canvas_width * canvas_height * frame_count
+    if aggregate > MAX_AGGREGATE_PIXELS:
+        raise RuntimeError("GIF aggregate pixel budget exceeded")
+
+    return canvas_width, canvas_height, frame_count
+
+
+def load_background_cache():
+    try:
+        with open(BACKGROUND_CACHE_INDEX, encoding="utf-8") as handle:
+            data = json.load(handle)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_background_cache(cache):
+    try:
+        BACKGROUND_CACHE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+        temporary = BACKGROUND_CACHE_INDEX.with_suffix(".tmp")
+        with open(temporary, "w", encoding="utf-8") as handle:
+            json.dump(cache, handle)
+        os.replace(temporary, BACKGROUND_CACHE_INDEX)
+    except OSError as error:
+        print(f"nightwave: could not write background cache index: {error}", file=sys.stderr)
+
+
+def lookup_cached_background(saved, api_src, cache):
+    """Return a validated local-file background dict, or None.
+
+    `saved` is the cleaned settings entry; `api_src` is the original API URL
+    kept in settings; `cache` is the cache index keyed by API URL. The API
+    URL is the cache identity: a missing index entry or a missing cache
+    file is a miss, and the caller refetches through validation. The id in
+    the entry is carried for the output payload and shuffle dedup only.
+    """
+    if not isinstance(saved, dict):
+        return None
+    if not api_src and is_remote_url(saved.get("src", "")):
+        # Older settings stored the API URL directly in background.src.
+        api_src = saved["src"]
+    if not api_src:
+        return None
+    entry = cache.get(api_src)
+    if not isinstance(entry, dict):
+        return None
+    restored = _local_background_dict(entry)
+    if restored:
+        return restored
+    # Cache file is gone: drop the stale index entry so it can be refetched.
+    cache.pop(api_src, None)
+    save_background_cache(cache)
+    return None
+
+
+def _local_background_dict(entry):
+    file_path = BACKGROUND_CACHE_DIR / str(entry.get("file", ""))
+    if not file_path.is_file():
+        return None
+    result = {}
+    if entry.get("id"):
+        result["id"] = entry["id"]
+    # Local file URL for the panel; the API URL lives in background_api_src.
+    result["src"] = file_path.as_uri()
+    if entry.get("author"):
+        result["author"] = entry["author"]
+    if entry.get("source"):
+        result["source"] = entry["source"]
+    return result
+
+
+def write_cache_file(data_bytes, digest):
+    """Atomically store validated GIF bytes; return the cache entry shape."""
+    BACKGROUND_CACHE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    target = BACKGROUND_CACHE_DIR / f"{digest[:16]}.gif"
+    temporary = target.with_suffix(".tmp")
+    with open(temporary, "wb") as handle:
+        handle.write(data_bytes)
+    os.replace(temporary, target)
+    return {"file": target.name}
+
+
+def fetch_random_background():
+    """Fetch one server-random pick from Plaza's background endpoint."""
+    data = fetch_json(BACKGROUNDS_URL)
+    # Live shape: {"data": {"id": ..., "src": ..., "author": ..., "source": ...}}.
+    # The API randomizes server-side per call.
+    item = data.get("data") if isinstance(data, dict) else None
+    if not isinstance(item, dict):
+        raise RuntimeError("Plaza backgrounds response has no data")
+    result = clean_background(item)
+    if not result:
+        raise RuntimeError("Plaza backgrounds response has no image")
+    return result
+
+
 def fetch_json(url):
     request_obj = urllib.request.Request(
         url,
@@ -453,48 +691,89 @@ def clean_background(item):
     return result
 
 
-def fetch_random_background():
-    """Fetch one server-random pick from Plaza's background endpoint."""
-    data = fetch_json(BACKGROUNDS_URL)
-    # Live shape: {"data": {"id": ..., "src": ..., "author": ..., "source": ...}}.
-    # The API randomizes server-side per call.
-    item = data.get("data") if isinstance(data, dict) else None
-    if not isinstance(item, dict):
-        raise RuntimeError("Plaza backgrounds response has no data")
-    result = clean_background(item)
-    if not result:
-        raise RuntimeError("Plaza backgrounds response has no image")
-    return result
-
-
-def same_background(saved, pick):
-    """Report whether two picks describe the same image (by id, else by src)."""
+def same_background(saved, pick, api_src=""):
+    """Report whether two picks describe the same image (by id, else by API src)."""
     if saved.get("id") and saved.get("id") == pick.get("id"):
         return True
-    return bool(saved.get("src") and saved.get("src") == pick.get("src"))
+    return bool(api_src and api_src == pick.get("src"))
+
+
+def download_pick(pick):
+    """Download, validate, and cache one pick; return its cache entry.
+
+    The URL is fetched over HTTPS with redirects restricted to HTTPS, a
+    timeout, and a hard size cap, then structurally validated as a GIF
+    within the canvas/frame/pixel budget. Rejected bytes never become
+    cache files. Raises on any failure.
+    """
+    remote_url = pick.get("src", "")
+    if not is_remote_url(remote_url):
+        raise RuntimeError("Plaza backgrounds response has no usable https image URL")
+    image = fetch_image(remote_url)
+    validate_gif(image)
+    entry = write_cache_file(image, hashlib.sha256(image).hexdigest())
+    if pick.get("id"):
+        entry["id"] = pick["id"]
+    if pick.get("author"):
+        entry["author"] = pick["author"]
+    if pick.get("source"):
+        entry["source"] = pick["source"]
+    return entry
 
 
 def backgrounds(force_new=False):
     """Print one background pick as {id?, src, author?, source?}.
 
     The pick is remembered in settings.json, so a plain `backgrounds` call
-    restores it without a network request, and `backgrounds new` fetches a
-    fresh server-random pick, retrying once when the endpoint repeats the
-    image currently showing. The runtime directory is wiped on logout, so a
-    fresh boot starts from one new fetch.
+    restores it from the local cache without a network request, and
+    `backgrounds new` fetches a fresh server-random pick, retrying once when
+    the endpoint repeats the image currently showing. The runtime directory
+    is wiped on logout, so a fresh boot starts from one new fetch.
+
+    The returned `src` is always a validated local file URL under the
+    private runtime directory; the original API URL is kept separately in
+    the `background_api_src` settings key for dedup and cache lookup. On
+    failure (unreachable endpoint, redirect off HTTPS, oversized or
+    malformed GIF) the call prints the error to stderr and exits nonzero,
+    and the QML panel keeps its existing backdrop — empty/static on
+    initial failure.
     """
-    saved = clean_background(load_settings().get("background"))
-    if saved and not force_new:
-        # Restore the remembered pick: no request and no settings rewrite.
-        print(json.dumps(saved, ensure_ascii=True))
-        return
-    pick = fetch_random_background()
-    if saved and same_background(saved, pick):
-        pick = fetch_random_background()
     settings = load_settings()
-    settings["background"] = pick
+    saved = clean_background(settings.get("background"))
+    api_src = settings.get("background_api_src", "")
+    if not isinstance(api_src, str):
+        api_src = ""
+
+    if not force_new:
+        cached = lookup_cached_background(saved, api_src, load_background_cache())
+        if cached:
+            print(json.dumps(cached, ensure_ascii=True))
+            return
+
+    try:
+        pick = fetch_random_background()
+        if saved and same_background(saved, pick, api_src):
+            pick = fetch_random_background()
+        entry = download_pick(pick)
+    except (OSError, RuntimeError, TimeoutError, ValueError, json.JSONDecodeError) as error:
+        # A failed shuffle leaves the current backdrop in place; on initial
+        # failure the panel's empty/static state persists.
+        print(str(error), file=sys.stderr)
+        sys.exit(1)
+
+    cache = load_background_cache()
+    cache[pick["src"]] = entry
+    save_background_cache(cache)
+
+    result = _local_background_dict(entry)
+    if not result:
+        print("nightwave: background cache file missing right after write", file=sys.stderr)
+        sys.exit(1)
+
+    settings["background"] = result
+    settings["background_api_src"] = pick["src"]
     save_settings(settings)
-    print(json.dumps(pick, ensure_ascii=True))
+    print(json.dumps(result, ensure_ascii=True))
 
 
 def main(args):
